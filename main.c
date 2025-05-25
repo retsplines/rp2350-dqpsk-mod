@@ -17,7 +17,7 @@
 #define UPSAMPLE_RATE 8
 
 // Should we just output a circular test pattern?
-#define CIRCLE_TEST 1
+#define CIRCLE_TEST 0
 
 // The PIO instance to use
 PIO pio = pio0;
@@ -72,7 +72,7 @@ int main() {
     while (true) {
 
         // Randomly select a symbol & output it
-        #ifdef CIRCLE_TEST
+        #if CIRCLE_TEST
         static uint symbol = 0;
         #else
         uint symbol = get_rand_32() % 4;
