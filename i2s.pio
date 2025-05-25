@@ -1,0 +1,57 @@
+;
+; Simplfied I2S driver for the Raspberry Pi Pico
+;
+; Based on the I2S example from the Raspberry Pi Pico Extras library
+; https://github.com/raspberrypi/pico-extras/
+; Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+;
+
+.program i2s
+.side_set 2
+                    ;        /--- LRCLK
+                    ;        |/-- BCLK
+bitloop1:           ;        ||
+    out pins, 1       side 0b00   ; "Left" channel - Output 1 bit from the SR, BCLK low
+    jmp x-- bitloop1  side 0b01   ; Jump to bitloop1 if x is not zero, decrement x, BCLK high
+    out pins, 1       side 0b10   ; "Right" channel - LRCLK low, Output 1 bit from the SR
+    set x, 14         side 0b11   ; Set x to 14 (15 bits left to output) BCLK high
+
+bitloop0:
+    out pins, 1       side 0b10   ; "Right" channel - Output 1 bit from the SR
+    jmp x-- bitloop0  side 0b11   ; Jump to bitloop0 if x is not zero, BCLK high
+    out pins, 1       side 0b00   ; "Left" channel - Output 1 bit from the SR, LRCLK high, BCLK low
+public entry_point:
+    set x, 14         side 0b01   ; Entry point, set x to 14, LRCLK high, BCLK high
+                                  ; We'll loop back to the start here
+
+% c-sdk {
+
+static inline void i2s_program_init(PIO pio, uint sm, uint offset, uint pin_data, uint pin_clock_base) {
+
+    // Initialise the data and clock pins
+    pio_gpio_init(pio, pin_data);
+    pio_gpio_init(pio, pin_clock_base);
+    pio_gpio_init(pio, pin_clock_base + 1);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_data, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_clock_base, 2, true);
+
+    // Get the default program i2s_program_get_default_config
+    pio_sm_config sm_config = i2s_program_get_default_config(offset);
+
+    // Configure the out pins
+    sm_config_set_out_pins(&sm_config, pin_data, 1);
+
+    // Configure the side-set pins
+    sm_config_set_sideset_pins(&sm_config, pin_clock_base);
+
+    // Shift OUT to the right, autopull, all 32 bits
+    sm_config_set_out_shift(&sm_config, false, true, 32);
+
+    // Use all FIFO space for TX
+    sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_TX);
+
+    // Initialise with config
+    pio_sm_init(pio, sm, offset, &sm_config);
+}
+
+%}
